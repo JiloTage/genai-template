@@ -1,0 +1,8 @@
+dspy-ai
+openai
+fal-client
+fastapi
+uvicorn
+python-dotenv
+python-multipart
+google-cloud-storage

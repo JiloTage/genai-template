@@ -1,0 +1,20 @@
+steps:
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud run deploy "${_SERVICE_NAME}" \
+          --source . \
+          --region "${_REGION}" \
+          --service-account "${_RUN_SERVICE_ACCOUNT}" \
+          --set-env-vars "GCS_BUCKET=${_GCS_BUCKET},GCS_PREFIX=${_GCS_PREFIX},PYTHONPATH=src" \
+          --set-secrets "OPENAI_API_KEY=OPENAI_API_KEY:latest"
+options:
+  logging: CLOUD_LOGGING_ONLY
+substitutions:
+  _SERVICE_NAME: genai-template-dev
+  _REGION: asia-northeast1
+  _GCS_BUCKET: your-bucket
+  _GCS_PREFIX: genai-template
+  _RUN_SERVICE_ACCOUNT: genai-template-dev-sa@your-project.iam.gserviceaccount.com
