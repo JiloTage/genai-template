@@ -222,7 +222,8 @@ HTML = """<!doctype html>
         order: 2;
         position: sticky;
         bottom: 18px;
-        z-index: 2;
+        z-index: 3;
+        pointer-events: auto;
       }
       .panel-title {
         display: flex;
@@ -546,37 +547,15 @@ HTML = """<!doctype html>
       <aside class="sidebar">
         <div class="sidebar-header">
           <div class="sidebar-title">
-            <div class="eyebrow">Image Flow</div>
-            <h2>Checklist</h2>
+            <div class="eyebrow">Sessions</div>
+            <h2>History</h2>
           </div>
+          <button id="newSession" class="ghost" type="button">New</button>
         </div>
-        <div class="session-list">
-          <div class="session-item static">
-            <div class="session-title">Prompt first</div>
-            <div class="session-meta">Describe the edit, style, or transformation.</div>
-          </div>
-          <div class="session-item static">
-            <div class="session-title">Provide images</div>
-            <div class="session-meta">Paste URLs or upload files to use as input.</div>
-          </div>
-          <div class="session-item static">
-            <div class="session-title">Optional arguments</div>
-            <div class="session-meta">Add JSON options such as num_images.</div>
-          </div>
-        </div>
+        <div class="session-list" id="sessionList"></div>
       </aside>
 
       <section class="main-grid">
-        <div class="panel output-panel">
-          <div class="panel-title">
-            <h2>Output</h2>
-            <div class="panel-note">Latest results appear at the bottom.</div>
-          </div>
-          <div class="output-stream" id="outputStream">
-            <div class="output-empty" id="outputEmpty">No outputs yet. Run an image edit to start.</div>
-          </div>
-        </div>
-
         <div class="panel input-panel">
           <div class="panel-title">
             <h2>Input</h2>
@@ -607,11 +586,24 @@ HTML = """<!doctype html>
             </div>
           </div>
         </div>
+
+        <div class="panel output-panel">
+          <div class="panel-title">
+            <h2>Output</h2>
+            <div class="panel-note">Latest results appear at the bottom.</div>
+          </div>
+          <div class="output-stream" id="outputStream">
+            <div class="output-empty" id="outputEmpty">No outputs yet. Run an image edit to start.</div>
+          </div>
+        </div>
       </section>
     </div>
 
     <script>
+      const STORAGE_KEY = "genai_image_sessions_v1";
       const runBtn = document.getElementById("runBtn");
+      const sessionListEl = document.getElementById("sessionList");
+      const newSessionBtn = document.getElementById("newSession");
       const statusTextEl = document.getElementById("statusText");
       const statusChipEl = document.getElementById("statusChip");
       const promptEl = document.getElementById("promptInput");
@@ -620,7 +612,46 @@ HTML = """<!doctype html>
       const argsEl = document.getElementById("argsInput");
       const outputStreamEl = document.getElementById("outputStream");
       const outputEmptyEl = document.getElementById("outputEmpty");
+      let sessions = [];
+      let activeSessionId = null;
       let loading = false;
+
+      function makeId() {
+        if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+        return `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      }
+
+      function loadSessions() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          sessions = raw ? JSON.parse(raw) : [];
+        } catch (error) {
+          sessions = [];
+        }
+      }
+
+      function saveSessions() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+      }
+
+      function ensureSessions() {
+        loadSessions();
+        if (!sessions.length) {
+          const session = {
+            id: makeId(),
+            title: "New session",
+            prompt_text: "",
+            output_stream: []
+          };
+          sessions = [session];
+        }
+        activeSessionId = sessions[0].id;
+        saveSessions();
+      }
+
+      function getActiveSession() {
+        return sessions.find((s) => s.id === activeSessionId) || sessions[0];
+      }
 
       function setStatus(message, isError = false) {
         statusTextEl.textContent = message || "";
@@ -650,13 +681,13 @@ HTML = """<!doctype html>
             if (Array.isArray(parsed)) {
               return parsed.map((item) => String(item).trim()).filter(Boolean);
             }
-          } catch {
+          } catch (error) {
             return [];
           }
         }
         return trimmed
-          .replace(/,/g, "\n")
-          .split(/\r?\n/)
+          .replace(/,/g, "\\n")
+          .split(/\\r?\\n/)
           .map((item) => item.trim())
           .filter(Boolean);
       }
@@ -691,38 +722,98 @@ HTML = """<!doctype html>
         return urls;
       }
 
+      function renderSessionList() {
+        sessionListEl.innerHTML = "";
+        sessions.forEach((session) => {
+          const item = document.createElement("div");
+          item.className = "session-item" + (session.id === activeSessionId ? " active" : "");
+          const title = document.createElement("div");
+          title.className = "session-title";
+          title.textContent = session.title || "New session";
+          const meta = document.createElement("div");
+          meta.className = "session-meta";
+          const lastAt = (session.output_stream || []).slice(-1)[0]?.at;
+          meta.textContent = lastAt ? `Last: ${formatTime(lastAt)}` : "No activity";
+          const del = document.createElement("button");
+          del.type = "button";
+          del.className = "session-delete";
+          del.textContent = "Delete";
+          del.addEventListener("click", (event) => {
+            event.stopPropagation();
+            deleteSession(session.id);
+          });
+          item.appendChild(title);
+          item.appendChild(meta);
+          item.appendChild(del);
+          item.addEventListener("click", () => {
+            activeSessionId = session.id;
+            renderSessionList();
+            renderSession();
+          });
+          sessionListEl.appendChild(item);
+        });
+      }
+
+      function deleteSession(id) {
+        sessions = sessions.filter((s) => s.id !== id);
+        if (!sessions.length) {
+          ensureSessions();
+        }
+        if (!sessions.find((s) => s.id === activeSessionId)) {
+          activeSessionId = sessions[0].id;
+        }
+        saveSessions();
+        renderSessionList();
+        renderSession();
+      }
+
+      function createNewSession() {
+        const session = {
+          id: makeId(),
+          title: "New session",
+          prompt_text: "",
+          output_stream: []
+        };
+        sessions.unshift(session);
+        activeSessionId = session.id;
+        saveSessions();
+        renderSessionList();
+        renderSession();
+      }
+
       function clearOutputEmpty() {
         if (outputEmptyEl && outputEmptyEl.isConnected) {
           outputEmptyEl.remove();
         }
       }
 
-      function appendUserMessage(text, timestamp, urlCount, fileCount) {
+      function appendUserMessage(entry) {
         const message = document.createElement("div");
         message.className = "user-message";
         const meta = document.createElement("div");
         meta.className = "user-meta";
-        const parts = [`Input - ${formatTime(timestamp)}`];
-        if (urlCount) parts.push(`${urlCount} url${urlCount === 1 ? "" : "s"}`);
-        if (fileCount) parts.push(`${fileCount} file${fileCount === 1 ? "" : "s"}`);
+        const parts = [`Input - ${formatTime(entry.at)}`];
+        if (entry.url_count) parts.push(`${entry.url_count} url${entry.url_count === 1 ? "" : "s"}`);
+        if (entry.file_count) parts.push(`${entry.file_count} file${entry.file_count === 1 ? "" : "s"}`);
         meta.textContent = parts.join(" - ");
         const body = document.createElement("div");
-        body.textContent = text;
+        body.textContent = entry.text || "";
         message.appendChild(meta);
         message.appendChild(body);
         outputStreamEl.appendChild(message);
       }
 
-      function appendOutputCard(imageUrls, payload, timestamp) {
+      function appendOutputCard(entry) {
         const message = document.createElement("div");
         message.className = "output-message";
 
         const header = document.createElement("div");
         header.className = "output-header";
+        const imageUrls = Array.isArray(entry.image_urls) ? entry.image_urls : [];
         const countText = imageUrls.length
           ? `${imageUrls.length} image${imageUrls.length === 1 ? "" : "s"}`
           : "no images";
-        header.textContent = `Result - ${formatTime(timestamp)} - ${countText}`;
+        header.textContent = `Result - ${formatTime(entry.at)} - ${countText}`;
 
         const grid = document.createElement("div");
         grid.className = "image-grid";
@@ -750,7 +841,7 @@ HTML = """<!doctype html>
         summary.textContent = "Payload";
         const payloadBody = document.createElement("div");
         payloadBody.className = "payload";
-        payloadBody.textContent = JSON.stringify(payload || {}, null, 2);
+        payloadBody.textContent = JSON.stringify(entry.payload || {}, null, 2);
         details.appendChild(summary);
         details.appendChild(payloadBody);
 
@@ -758,6 +849,28 @@ HTML = """<!doctype html>
         message.appendChild(grid);
         message.appendChild(details);
         outputStreamEl.appendChild(message);
+      }
+
+      function renderSession() {
+        const session = getActiveSession();
+        if (!session) return;
+        outputStreamEl.innerHTML = "";
+        const stream = session.output_stream || [];
+        if (!stream.length) {
+          outputStreamEl.appendChild(outputEmptyEl);
+        }
+        stream.forEach((entry) => {
+          if (entry.kind === "user") {
+            appendUserMessage(entry);
+          } else if (entry.kind === "result") {
+            appendOutputCard(entry);
+          }
+        });
+        promptEl.value = session.prompt_text || "";
+      }
+
+      function scrollToLatest() {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
       }
 
       async function runImage() {
@@ -794,7 +907,7 @@ HTML = """<!doctype html>
         const formData = new FormData();
         formData.append("prompt", prompt);
         if (urls.length) {
-          formData.append("image_urls", urls.join("\n"));
+          formData.append("image_urls", urls.join("\\n"));
         }
         if (Object.keys(args).length) {
           formData.append("arguments", JSON.stringify(args));
@@ -820,9 +933,33 @@ HTML = """<!doctype html>
           const result = data.result || {};
           const imageUrls = extractImageUrls(result);
           const now = new Date().toISOString();
-          clearOutputEmpty();
-          appendUserMessage(prompt, now, urls.length, files ? files.length : 0);
-          appendOutputCard(imageUrls, result, now);
+          const session = getActiveSession();
+          if (!session) return;
+          session.output_stream = session.output_stream || [];
+          session.output_stream.push({
+            kind: "user",
+            text: prompt,
+            at: now,
+            url_count: urls.length,
+            file_count: files ? files.length : 0
+          });
+          session.output_stream.push({
+            kind: "result",
+            at: now,
+            image_urls: imageUrls,
+            payload: result
+          });
+          session.prompt_text = prompt;
+
+          if (!session.title || session.title === "New session") {
+            const trimmed = prompt.replace(/\s+/g, " ").trim();
+            session.title = trimmed ? trimmed.slice(0, 20) : "New session";
+          }
+
+          saveSessions();
+          renderSessionList();
+          renderSession();
+          scrollToLatest();
           setStatus(imageUrls.length ? "Done." : "Done (no image URLs found).");
           fileEl.value = "";
         } catch (error) {
@@ -841,8 +978,12 @@ HTML = """<!doctype html>
         });
       }
 
+      ensureSessions();
+      renderSessionList();
+      renderSession();
       bindShortcuts();
       runBtn.addEventListener("click", runImage);
+      newSessionBtn.addEventListener("click", createNewSession);
     </script>
   </body>
 </html>

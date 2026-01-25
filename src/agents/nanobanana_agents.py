@@ -5,7 +5,7 @@ import dspy
 
 from image_models import FalAIClient
 
-BASE_PROMPT = "highly detailed, preserve composition, refine textures"
+BASE_PROMPT = ""
 MODEL = "fal-ai/nano-banana-pro/edit"
 
 
@@ -19,7 +19,11 @@ class Agent(dspy.Module):
 
     def forward(self, images: Iterable[str], prompt: str = ""):
         arguments = dict(self.default_arguments)
-        full_prompt = f"{self.base_prompt}\n{prompt}".strip() if prompt else self.base_prompt
+        full_prompt = (
+            f"{self.base_prompt}\n{prompt}".strip() if prompt else self.base_prompt
+        )
         image_urls = self.client.ensure_urls(images)
-        result = self.client.generate(prompt=full_prompt, images=image_urls, **arguments)
+        result = self.client.generate(
+            prompt=full_prompt, image_urls=image_urls, **arguments
+        )
         return dspy.Prediction(result=result)
