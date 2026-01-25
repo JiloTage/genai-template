@@ -217,14 +217,10 @@ HTML = """<!doctype html>
         gap: 18px;
         animation: rise 520ms ease-out both;
       }
-      .output-panel { order: 1; }
       .input-panel {
-        order: 2;
-        position: sticky;
-        bottom: 18px;
-        z-index: 3;
-        pointer-events: auto;
+        order: 1;
       }
+      .output-panel { order: 2; }
       .panel-title {
         display: flex;
         justify-content: space-between;
@@ -329,7 +325,7 @@ HTML = """<!doctype html>
         display: flex;
         flex-direction: column;
         gap: 16px;
-        padding-bottom: 180px;
+        padding-bottom: 24px;
       }
       .output-empty {
         font-size: 13px;
