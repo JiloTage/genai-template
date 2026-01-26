@@ -6,7 +6,9 @@ from utils.context_loader import build_context_bundle
 class ReviseSignature(dspy.Signature):
     """Revise a previous output based on a new instruction."""
 
-    system: str = dspy.InputField(desc="System prompt that defines behavior and constraints.")
+    system: str = dspy.InputField(
+        desc="System prompt that defines behavior and constraints."
+    )
     user: str = dspy.InputField(desc="Original user input or task context.")
     instruction: str = dspy.InputField(desc="Revision instruction from the user.")
     base: str = dspy.InputField(desc="Base output to revise.")
@@ -26,7 +28,7 @@ class Agent(dspy.Module):
         text: str,
         instruction: str,
         base: str = "",
-    ) -> dict:
+    ) -> dspy.Prediction:
         with dspy.settings.context(lm=self.model):
             result = self.predictor(
                 system=self.system_prompt,
@@ -34,7 +36,7 @@ class Agent(dspy.Module):
                 instruction=instruction,
                 base=base,
             )
-        return {
-            "text": (result.revised or "").strip(),
-            "reasoning": (result.reasoning or "").strip(),
-        }
+        return dspy.Prediction(
+            text=result.revised,
+            reasoning=result.reasoning,
+        )

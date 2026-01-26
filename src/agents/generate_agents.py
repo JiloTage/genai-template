@@ -6,7 +6,9 @@ from utils.context_loader import build_context_bundle
 class GenerateSignature(dspy.Signature):
     """Generate a helpful response to the user."""
 
-    system: str = dspy.InputField(desc="System prompt that defines behavior and constraints.")
+    system: str = dspy.InputField(
+        desc="System prompt that defines behavior and constraints."
+    )
     user: str = dspy.InputField(desc="User input or task description.")
     answer: str = dspy.OutputField(desc="Final response to show the user.")
 
@@ -19,13 +21,13 @@ class Agent(dspy.Module):
         self.model = dspy.LM(model_name)
         self.system_prompt = build_context_bundle("system_prompt.md")
 
-    def forward(self, text: str):
+    def forward(self, text: str) -> dspy.Prediction:
         with dspy.settings.context(lm=self.model):
             result = self.predictor(
                 system=self.system_prompt,
                 user=text,
             )
-        return {
-            "text": (result.answer or "").strip(),
-            "reasoning": (result.reasoning or "").strip(),
-        }
+        return dspy.Prediction(
+            text=result.answer,
+            reasoning=result.reasoning,
+        )

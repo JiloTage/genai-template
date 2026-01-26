@@ -59,6 +59,16 @@ def _join_history(history: list[str] | None, instruction: str) -> str:
     return "\n".join(items)
 
 
+def _extract_text_and_reasoning(result) -> tuple[str, str]:
+    if isinstance(result, dict):
+        text = result.get("text", "")
+        reasoning = result.get("reasoning", "")
+    else:
+        text = getattr(result, "text", "")
+        reasoning = getattr(result, "reasoning", "")
+    return (text or "").strip(), (reasoning or "").strip()
+
+
 @router.post("/generate", response_model=GenerateResponse)
 def generate(req: GenerateRequest) -> GenerateResponse:
     try:
@@ -68,8 +78,7 @@ def generate(req: GenerateRequest) -> GenerateResponse:
         logger.exception("Generate failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
-    text = (result.get("text") or "").strip()
-    reasoning = (result.get("reasoning") or "").strip()
+    text, reasoning = _extract_text_and_reasoning(result)
     if not text:
         raise HTTPException(status_code=400, detail="Empty output.")
 
@@ -91,8 +100,7 @@ def revise(req: ReviseRequest) -> ReviseResponse:
         logger.exception("Revision failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
-    text = (result.get("text") or "").strip()
-    reasoning = (result.get("reasoning") or "").strip()
+    text, reasoning = _extract_text_and_reasoning(result)
     if not text:
         raise HTTPException(status_code=400, detail="Empty output.")
 

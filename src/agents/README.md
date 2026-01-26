@@ -6,6 +6,7 @@ This folder contains DSPy agent modules used by the API.
 - Place agent files under `src/agents/`.
 - Use `snake_case` filenames like `*_agents.py`.
 - Each file should export a single `Agent` class.
+- `Agent.forward` should return a `dspy.Prediction`.
 
 ## Recommended structure
 1) Define a `dspy.Signature` with explicit `InputField` / `OutputField` descriptions.
@@ -39,8 +40,8 @@ class Agent(dspy.Module):
         self.model = dspy.LM("openai/gpt-5.1")
         self.system_prompt = build_context_bundle("system_prompt.md")
 
-    def forward(self, text: str) -> dict:
+    def forward(self, text: str) -> dspy.Prediction:
         with dspy.settings.context(lm=self.model):
             result = self.predictor(system=self.system_prompt, user=text)
-        return {"text": result.answer}
+        return dspy.Prediction(text=result.answer)
 ```
