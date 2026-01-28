@@ -1,4 +1,4 @@
-﻿---
+---
 name: cloudrun-deploy-ja
 description: GCP Cloud Run へのデプロイ/更新/設定/ロールバックを日本語で支援するスキル。gcloud CLI を使ったビルド（Dockerfile/Buildpacks）、Artifact Registry、環境変数/Secret Manager、IAM(公開/認証)、ログ確認と疎通確認が必要なときに使う。
 ---
